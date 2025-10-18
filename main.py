@@ -564,6 +564,24 @@ def active_session():
         }
 
 
+@app.post("/admin/delete_log/{log_id}")
+def delete_log(log_id: int, request: Request, session: Session = Depends(get_session)):
+    # Check if admin is authenticated by checking session cookie
+    if not request.session.get("admin_authenticated"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get the log entry
+    log = session.get(LogEntry, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log entry not found")
+    
+    # Delete the log entry
+    session.delete(log)
+    session.commit()
+    
+    return {"message": "Log entry deleted successfully"}
+
+
 @app.get("/api/logs")
 def get_logs_api(request: Request, session: Session = Depends(get_session)):
     # Check if admin is authenticated by checking session cookie

@@ -206,7 +206,7 @@
 </head>
 <body>
     <div class="container">
-        <h1>FamilyTime Manager</h1>
+        <h1>Djeca koja slušaju roditelje</h1>
         
         <!-- Active Session Info -->
         <div class="active-session-info" id="active-session-info">
@@ -219,17 +219,17 @@
             {% for kid, points in kids_with_points %}
             <div class="leaderboard-item" id="kid-{{ kid.id }}">
                 <div class="kid-name">{{ kid.name }}</div>
-                <div class="kid-time-points">{{ "%d"|format(kid.current_minutes|round(0, 'floor')|int) }} mins ({{ "%d"|format(points|round(0, 'floor')|int) }} points)</div>
+                <div class="kid-time-points">{{ "%d"|format(kid.current_minutes|round(0, 'floor')|int) }} minuta ({{ "%d"|format(points|round(0, 'floor')|int) }} bodova)</div>
                 <div class="session-controls">
-                    <button class="start-session-btn" id="start-session-{{ kid.id }}" style="display: none;" onclick="startSession({{ kid.id }})">Start Session</button>
-                    <button class="stop-session-btn" id="stop-session-{{ kid.id }}" style="display: none;" onclick="stopSession({{ kid.id }})">Stop</button>
+                    <button class="start-session-btn" id="start-session-{{ kid.id }}" style="display: none;" onclick="startSession({{ kid.id }})">Počni</button>
+                    <button class="stop-session-btn" id="stop-session-{{ kid.id }}" style="display: none;" onclick="stopSession({{ kid.id }})">Stani</button>
                 </div>
             </div>
             {% endfor %}
         </div>
         
         <div class="admin-link">
-            <p id="admin-info"><a href="/admin">Admin Panel</a></p>
+            <p id="admin-info"><a href="/admin">Administracija</a></p>
         </div>
     </div>
 
@@ -363,7 +363,7 @@
                     // Start or restart the countdown timer
                     startCountdown();
                 } else {
-                    sessionInfo.textContent = 'No active session';
+                    sessionInfo.textContent = 'Trenutno niko ne igra';
                     timeRemaining.textContent = '';
                     
                     // Clear the countdown if there's no active session
