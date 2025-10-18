@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FamilyTime Manager - Admin</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 800px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #bb86fc;
+        }
+        
+        .login-form, .admin-form, .add-kid-form, .edit-kid-form {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            width: 100%;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #bb86fc;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #333;
+            background-color: #333;
+            color: #e0e0e0;
+            box-sizing: border-box;
+        }
+        
+        button {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+            margin: 5px;
+        }
+        
+        button:hover {
+            background-color: #555;
+        }
+        
+        .error {
+            color: #cf6679;
+            margin-top: 10px;
+        }
+        
+        .success {
+            color: #03dac6;
+            margin-top: 10px;
+        }
+        
+        .kids-list {
+            margin-top: 20px;
+        }
+        
+        .kid-item {
+            padding: 10px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .edit-delete-buttons {
+            display: flex;
+            gap: 5px;
+        }
+        
+        .back-to-home {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .back-to-home a {
+            color: #bb86fc;
+            text-decoration: none;
+        }
+        
+        .back-to-home a:hover {
+            text-decoration: underline;
+        }
+        
+        .section-title {
+            color: #bb86fc;
+            margin-top: 20px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FamilyTime Manager - Admin</h1>
+        
+        {% if not request.session.admin_authenticated %}
+        <div class="login-form">
+            <h2>Admin Login</h2>
+            <form method="post" action="/admin/login">
+                <div class="form-group">
+                    <label for="password">Password:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit">Login</button>
+            </form>
+            
+            {% if error %}
+            <div class="error">{{ error }}</div>
+            {% endif %}
+        </div>
+        {% else %}
+        <!-- Update Kid Time Form -->
+        <div class="admin-form">
+            <h2>Update Kid Time</h2>
+            <form method="post" action="/admin/time">
+                <div class="form-group">
+                    <label for="kid_id">Select Kid:</label>
+                    <select id="kid_id" name="kid_id" required>
+                        {% for kid in kids %}
+                        <option value="{{ kid.id }}">{{ kid.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="minutes">Minutes (positive to add, negative to subtract):</label>
+                    <input type="number" id="minutes" name="minutes" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="reason">Reason:</label>
+                    <input type="text" id="reason" name="reason" required>
+                </div>
+                
+                <button type="submit">Update Time</button>
+            </form>
+        </div>
+        
+        <!-- Add New Kid Form -->
+        <div class="add-kid-form">
+            <h2 class="section-title">Add New Kid</h2>
+            <form method="post" action="/admin/add_kid">
+                <div class="form-group">
+                    <label for="new_kid_name">Kid Name:</label>
+                    <input type="text" id="new_kid_name" name="name" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="initial_minutes">Initial Minutes:</label>
+                    <input type="number" id="initial_minutes" name="initial_minutes" value="30" min="-5" required>
+                </div>
+                
+                <button type="submit">Add Kid</button>
+            </form>
+        </div>
+        
+        <!-- Kids List with Edit/Delete Options -->
+        <div class="kids-list">
+            <h2 class="section-title">Kids List</h2>
+            {% for kid in kids %}
+            <div class="kid-item">
+                <div class="kid-info">
+                    <form method="post" action="/admin/edit_kid" style="display: inline;">
+                        <input type="hidden" name="kid_id" value="{{ kid.id }}">
+                        <input type="text" name="name" value="{{ kid.name }}" style="width: auto; display: inline;">
+                        <button type="submit">Rename</button>
+                    </form>
+                    <div style="margin-top: 5px;">Time: {{ "%.1f"|format(kid.current_minutes) }} minutes</div>
+                </div>
+                <div class="edit-delete-buttons">
+                    <form method="post" action="/admin/delete_kid" style="display: inline;" 
+                          onsubmit="return confirm('Are you sure you want to delete {{ kid.name }}? This action cannot be undone.');">
+                        <input type="hidden" name="kid_id" value="{{ kid.id }}">
+                        <button type="submit">Delete</button>
+                    </form>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Logs Section -->
+        <div class="logs-section">
+            <h2 class="section-title">Activity Logs</h2>
+            <div id="logs-container">
+                <p>Loading logs...</p>
+            </div>
+        </div>
+        
+        <div class="back-to-home">
+            <a href="/">Back to Kids' Page</a>
+        </div>
+        {% endif %}
+        
+        <script>
+            // Load logs if user is authenticated
+            {% if request.session.admin_authenticated %}
+            async function loadLogs() {
+                try {
+                    const response = await fetch('/api/logs');
+                    const data = await response.json();
+                    
+                    const logsContainer = document.getElementById('logs-container');
+                    
+                    if (data.logs.length === 0) {
+                        logsContainer.innerHTML = '<p>No logs available yet.</p>';
+                        return;
+                    }
+                    
+                    let logsHtml = '<table style="width: 100%; border-collapse: collapse;">';
+                    logsHtml += '<thead><tr style="background-color: #333;">';
+                    logsHtml += '<th style="padding: 10px; text-align: left;">Kid</th>';
+                    logsHtml += '<th style="padding: 10px; text-align: left;">Change</th>';
+                    logsHtml += '<th style="padding: 10px; text-align: left;">Reason</th>';
+                    logsHtml += '<th style="padding: 10px; text-align: left;">Time</th>';
+                    logsHtml += '</tr></thead><tbody>';
+                    
+                    data.logs.forEach(log => {
+                        // Format the timestamp
+                        const date = new Date(log.timestamp);
+                        const formattedTime = date.toLocaleString();
+                        
+                        // Format the minutes change (+/-)
+                        const minutesChange = log.minutes_changed >= 0 ? 
+                            '+' + log.minutes_changed : 
+                            log.minutes_changed;
+                        
+                        logsHtml += '<tr style="border-bottom: 1px solid #333;">';
+                        logsHtml += `<td style="padding: 10px;">${log.kid_name}</td>`;
+                        logsHtml += `<td style="padding: 10px;">${minutesChange} min</td>`;
+                        logsHtml += `<td style="padding: 10px;">${log.reason}</td>`;
+                        logsHtml += `<td style="padding: 10px;">${formattedTime}</td>`;
+                        logsHtml += '</tr>';
+                    });
+                    
+                    logsHtml += '</tbody></table>';
+                    logsContainer.innerHTML = logsHtml;
+                } catch (error) {
+                    console.error('Error loading logs:', error);
+                    document.getElementById('logs-container').innerHTML = '<p>Error loading logs.</p>';
+                }
+            }
+            
+            // Load logs when page loads
+            document.addEventListener('DOMContentLoaded', loadLogs);
+            {% endif %}
+        </script>
+    </div>
+</body>
+</html>

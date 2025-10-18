@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FamilyTime Manager</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #e0e0e0;
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .container {
+            max-width: 600px;
+            width: 100%;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #bb86fc;
+        }
+        
+        .active-session-info {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0 20px 0;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .active-session-info h2 {
+            margin: 0 0 10px 0;
+            color: #03dac6;
+        }
+        
+        .time-remaining {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #bb86fc;
+        }
+        
+        .kid-card {
+            background-color: #1e1e1e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        .kid-info {
+            font-size: 1.2em;
+        }
+        
+        .start-session-btn {
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        
+        .start-session-btn:hover {
+            background-color: #555;
+        }
+        
+        .admin-link {
+            margin-top: 20px;
+            text-align: center;
+        }
+        
+        .admin-link a {
+            color: #bb86fc;
+            text-decoration: none;
+        }
+        
+        .admin-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>FamilyTime Manager</h1>
+        
+        <!-- Active Session Info -->
+        <div class="active-session-info" id="active-session-info">
+            <h2 id="session-status">No active session</h2>
+            <div class="time-remaining" id="time-remaining"></div>
+        </div>
+        
+        {% for kid in kids %}
+        <div class="kid-card" id="kid-{{ kid.id }}">
+            <div class="kid-info">
+                {{ kid.name }}: {{ "%.1f"|format(kid.current_minutes) }} min
+            </div>
+            <button class="start-session-btn" id="start-session-{{ kid.id }}" style="display: none;" onclick="startSession({{ kid.id }})">Start Session</button>
+        </div>
+        {% endfor %}
+        
+        <div class="admin-link">
+            <p id="admin-info">Only administrators can start sessions. <a href="/admin">Admin Panel</a></p>
+        </div>
+    </div>
+
+    <script>
+        // Check if admin is logged in and show/hide buttons accordingly
+        async function checkAdminStatus() {
+            try {
+                // Try to make a request that requires admin authentication
+                // If successful, admin is logged in
+                const response = await fetch('/api/kids', {method: 'GET'});
+                const isAdmin = response.status !== 401;
+                
+                // Show/hide start session buttons based on admin status
+                document.querySelectorAll('[id^="start-session-"]').forEach(button => {
+                    button.style.display = isAdmin ? 'inline-block' : 'none';
+                });
+                
+                // Update admin info text
+                const adminInfo = document.getElementById('admin-info');
+                if (isAdmin) {
+                    adminInfo.innerHTML = 'You are logged in as admin. You can start sessions.';
+                }
+            } catch (error) {
+                // If there's an error, assume admin is not logged in
+                document.querySelectorAll('[id^="start-session-"]').forEach(button => {
+                    button.style.display = 'none';
+                });
+            }
+        }
+        
+        async function startSession(kidId) {
+            try {
+                // Use the admin endpoint to start session
+                const response = await fetch(`/admin/start_session/${kidId}`, {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    alert(`Session started for ${getKidName(kidId)}`);
+                    updateActiveSessionDisplay();
+                } else {
+                    alert('Error starting session - you may need to log in as admin first.');
+                    window.location.href = '/admin';
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error starting session');
+            }
+        }
+        
+        function getKidName(kidId) {
+            // Get kid name from the displayed list
+            const kidCards = document.querySelectorAll('.kid-card');
+            for (let i = 0; i < kidCards.length; i++) {
+                const card = kidCards[i];
+                const text = card.querySelector('.kid-info').textContent;
+                if (text.includes(':')) {
+                    return text.split(':')[0].trim();
+                }
+            }
+            return `Kid ${kidId}`;
+        }
+        
+        // Global variables for countdown
+        let countdownInterval = null;
+        let currentSeconds = 0;
+        let isBonusTime = false;
+        
+        async function updateActiveSessionDisplay() {
+            try {
+                const response = await fetch('/api/active-session');
+                const data = await response.json();
+                
+                const sessionInfo = document.getElementById('session-status');
+                const timeRemaining = document.getElementById('time-remaining');
+                
+                if (data.is_active) {
+                    sessionInfo.textContent = `Active: ${data.active_kid.name}`;
+                    
+                    // Convert seconds to MM:SS format
+                    currentSeconds = data.active_kid.time_remaining_seconds;
+                    isBonusTime = currentSeconds < 0;
+                    
+                    // Format time for display
+                    const absSeconds = Math.abs(currentSeconds);
+                    const minutes = Math.floor(absSeconds / 60);
+                    const seconds = Math.floor(absSeconds % 60);
+                    
+                    // Format the display string
+                    let timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    if (isBonusTime) {
+                        sessionInfo.innerHTML = `Active: ${data.active_kid.name} <span style="color: #cf6679;">(Using Bonus Time)</span>`;
+                    }
+                    
+                    timeRemaining.textContent = timeString;
+                    
+                    // Color code based on remaining time
+                    if (isBonusTime) {
+                        // Bonus time being used - show in red
+                        timeRemaining.style.color = '#cf6679';
+                    } else if (currentSeconds < 300) { // Less than 5 minutes of main time
+                        timeRemaining.style.color = '#cf6679'; // Red
+                    } else {
+                        timeRemaining.style.color = '#03dac6'; // Green/teal
+                    }
+                    
+                    // Start or restart the countdown timer
+                    startCountdown();
+                } else {
+                    sessionInfo.textContent = 'No active session';
+                    timeRemaining.textContent = '';
+                    
+                    // Clear the countdown if there's no active session
+                    if (countdownInterval) {
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating active session display:', error);
+                document.getElementById('session-status').textContent = 'Error loading session info';
+                document.getElementById('time-remaining').textContent = '';
+                
+                // Clear the countdown on error
+                if (countdownInterval) {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+                }
+            }
+        }
+        
+        function startCountdown() {
+            // Clear any existing countdown
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            
+            // Update every second to create countdown effect
+            countdownInterval = setInterval(function() {
+                // Decrease seconds
+                if (currentSeconds > 0) {
+                    currentSeconds--;
+                    
+                    // Format the new time
+                    const minutes = Math.floor(currentSeconds / 60);
+                    const seconds = Math.floor(currentSeconds % 60);
+                    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    document.getElementById('time-remaining').textContent = timeString;
+                    
+                    // Update color if under 5 minutes
+                    if (currentSeconds < 300) {
+                        document.getElementById('time-remaining').style.color = '#cf6679';
+                    }
+                } else if (currentSeconds <= 0) {
+                    // At or below 0, we might be in bonus time or session ended
+                    const absSeconds = Math.abs(currentSeconds);
+                    const minutes = Math.floor(absSeconds / 60);
+                    const seconds = Math.floor(absSeconds % 60);
+                    const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    
+                    document.getElementById('time-remaining').textContent = timeString;
+                    
+                    // Show in red when time is up (or in bonus time)
+                    document.getElementById('time-remaining').style.color = '#cf6679';
+                    
+                    // Stop countdown if we go too negative
+                    if (currentSeconds < -900) {  // -15 minutes (bonus time exhausted)
+                        clearInterval(countdownInterval);
+                        countdownInterval = null;
+                    }
+                }
+            }, 1000); // Update every second
+        }
+        
+        // Check admin status when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            checkAdminStatus();
+            updateActiveSessionDisplay();
+        });
+        
+        // Update the active session display every 5 seconds to sync with server
+        setInterval(updateActiveSessionDisplay, 5000);
+        
+        // Re-check admin status every 30 seconds
+        setInterval(checkAdminStatus, 30000);
+    </script>
+</body>
+</html>
