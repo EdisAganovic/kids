@@ -77,11 +77,39 @@ def startup_event():
 
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request, session: Session = Depends(get_session)):
+    # Get all kids
     kids = session.exec(select(Kid)).all()
     for kid in kids:
         kid.reset_daily_bonus_if_needed()
     session.commit()
-    return templates.TemplateResponse("kids.html", {"request": request, "kids": kids})
+    
+    # Calculate total points for leaderboard
+    all_logs = session.exec(select(LogEntry)).all()
+    
+    # Calculate total points for each kid
+    kid_points = {}
+    for log in all_logs:
+        if log.kid_id in kid_points:
+            kid_points[log.kid_id] += log.minutes_changed
+        else:
+            kid_points[log.kid_id] = log.minutes_changed
+    
+    # Add current minutes to points for a complete score
+    for kid in kids:
+        if kid.id in kid_points:
+            kid_points[kid.id] += kid.current_minutes
+        else:
+            kid_points[kid.id] = kid.current_minutes
+    
+    # Create a list of tuples (kid, points) and sort by points
+    kid_point_pairs = [(kid, kid_points.get(kid.id, 0)) for kid in kids]
+    sorted_kid_point_pairs = sorted(kid_point_pairs, key=lambda x: x[1], reverse=True)
+    
+    # Return the sorted list for the template
+    return templates.TemplateResponse("kids.html", {
+        "request": request, 
+        "kids_with_points": sorted_kid_point_pairs
+    })
 
 @app.post("/api/session/start/{kid_id}")
 def start_session(kid_id: int, request: Request, session: Session = Depends(get_session)):
