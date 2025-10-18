@@ -2,45 +2,49 @@
 <html>
 <head>
     <title>FamilyTime Manager - Admin</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body {
             background-color: #121212;
             color: #e0e0e0;
             font-family: Arial, sans-serif;
             margin: 0;
-            padding: 20px;
+            padding: 10px;
             display: flex;
             flex-direction: column;
             align-items: center;
         }
         
         .container {
-            max-width: 800px;
+            max-width: 100%;
             width: 100%;
+            padding: 0 10px;
         }
         
         h1 {
             text-align: center;
             color: #bb86fc;
+            font-size: 1.5em;
         }
         
         .login-form, .admin-form, .add-kid-form, .edit-kid-form {
             background-color: #1e1e1e;
             border-radius: 8px;
-            padding: 20px;
-            margin: 20px 0;
+            padding: 15px;
+            margin: 15px 0;
             width: 100%;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
         
         .form-group {
-            margin-bottom: 15px;
+            margin-bottom: 12px;
         }
         
         label {
             display: block;
             margin-bottom: 5px;
             color: #bb86fc;
+            font-size: 0.9em;
         }
         
         input, select {
@@ -51,17 +55,19 @@
             background-color: #333;
             color: #e0e0e0;
             box-sizing: border-box;
+            font-size: 0.9em;
         }
         
         button {
             background-color: #333;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 8px 12px;
             border-radius: 4px;
             cursor: pointer;
-            font-size: 1em;
-            margin: 5px;
+            font-size: 0.9em;
+            margin: 3px;
+            min-height: 34px;
         }
         
         button:hover {
@@ -70,39 +76,67 @@
         
         .error {
             color: #cf6679;
-            margin-top: 10px;
+            margin-top: 8px;
+            font-size: 0.9em;
         }
         
         .success {
             color: #03dac6;
-            margin-top: 10px;
+            margin-top: 8px;
+            font-size: 0.9em;
         }
         
         .kids-list {
-            margin-top: 20px;
+            margin-top: 15px;
         }
         
         .kid-item {
             padding: 10px;
             border-bottom: 1px solid #333;
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        
+        .kid-info {
+            width: 100%;
+        }
+        
+        .kid-info form {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            width: 100%;
+        }
+        
+        .kid-info input[type="text"] {
+            flex-grow: 1;
+            min-width: 150px;
         }
         
         .edit-delete-buttons {
             display: flex;
+            flex-wrap: wrap;
             gap: 5px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .edit-delete-buttons form {
+            margin: 0;
         }
         
         .back-to-home {
             margin-top: 20px;
             text-align: center;
+            width: 100%;
         }
         
         .back-to-home a {
             color: #bb86fc;
             text-decoration: none;
+            font-size: 1em;
         }
         
         .back-to-home a:hover {
@@ -111,9 +145,57 @@
         
         .section-title {
             color: #bb86fc;
-            margin-top: 20px;
+            margin-top: 15px;
             border-bottom: 1px solid #333;
             padding-bottom: 5px;
+            font-size: 1.1em;
+        }
+        
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .edit-delete-buttons {
+                flex-direction: column;
+            }
+            
+            .edit-delete-buttons button {
+                width: 100%;
+                margin: 2px 0;
+            }
+            
+            .admin-form table {
+                display: block;
+                overflow-x: auto;
+                white-space: nowrap;
+            }
+            
+            h1 {
+                font-size: 1.3em;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            body {
+                padding: 5px;
+            }
+            
+            .container {
+                padding: 0 5px;
+            }
+            
+            .login-form, .admin-form, .add-kid-form, .edit-kid-form {
+                padding: 12px;
+                margin: 10px 0;
+            }
+            
+            button {
+                padding: 7px 10px;
+                font-size: 0.85em;
+                margin: 2px;
+            }
+            
+            .section-title {
+                font-size: 1em;
+            }
         }
     </style>
 </head>
@@ -142,8 +224,8 @@
             <h2>Update Kid Time</h2>
             <form method="post" action="/admin/time">
                 <div class="form-group">
-                    <label for="kid_id">Select Kid:</label>
-                    <select id="kid_id" name="kid_id" required>
+                    <label for="time_kid_id">Select Kid:</label>
+                    <select id="time_kid_id" name="kid_id" required>
                         {% for kid in kids %}
                         <option value="{{ kid.id }}">{{ kid.name }}</option>
                         {% endfor %}
@@ -156,11 +238,38 @@
                 </div>
                 
                 <div class="form-group">
-                    <label for="reason">Reason:</label>
-                    <input type="text" id="reason" name="reason" required>
+                    <label for="time_reason">Reason:</label>
+                    <input type="text" id="time_reason" name="reason" required>
                 </div>
                 
                 <button type="submit">Update Time</button>
+            </form>
+        </div>
+        
+        <!-- Update Kid Points Form -->
+        <div class="admin-form">
+            <h2>Update Kid Points</h2>
+            <form method="post" action="/admin/points">
+                <div class="form-group">
+                    <label for="points_kid_id">Select Kid:</label>
+                    <select id="points_kid_id" name="kid_id" required>
+                        {% for kid in kids %}
+                        <option value="{{ kid.id }}">{{ kid.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="points">Points (positive to add, negative to subtract):</label>
+                    <input type="number" id="points" name="points" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="points_reason">Reason:</label>
+                    <input type="text" id="points_reason" name="reason" required>
+                </div>
+                
+                <button type="submit">Update Points</button>
             </form>
         </div>
         
@@ -214,6 +323,14 @@
             </div>
         </div>
         
+
+        
+        <!-- Bonus Time Toggle -->
+        <div class="admin-form" style="margin-top: 20px;">
+            <h2>Bonus Time Settings</h2>
+            <button onclick="toggleBonusTime()">Toggle Bonus Time (Currently: {% if bonus_time_enabled %}Enabled{% else %}Disabled{% endif %})</button>
+        </div>
+        
         <div class="back-to-home">
             <a href="/">Back to Kids' Page</a>
         </div>
@@ -247,14 +364,19 @@
                         const date = new Date(log.timestamp);
                         const formattedTime = date.toLocaleString();
                         
-                        // Format the minutes change (+/-)
-                        const minutesChange = log.minutes_changed >= 0 ? 
-                            '+' + log.minutes_changed : 
-                            log.minutes_changed;
-                        
+                        // Format the time change (+/-)
+                        const timeChange = log.time_change >= 0 ? 
+                            '+' + log.time_change : 
+                            log.time_change;
+                            
+                        // Format the points change (+/-)
+                        const pointsChange = log.points_change >= 0 ? 
+                            '+' + log.points_change : 
+                            log.pointsChange;
+
                         logsHtml += '<tr style="border-bottom: 1px solid #333;">';
                         logsHtml += `<td style="padding: 10px;">${log.kid_name}</td>`;
-                        logsHtml += `<td style="padding: 10px;">${minutesChange} min</td>`;
+                        logsHtml += `<td style="padding: 10px;">Time: ${timeChange}, Points: ${pointsChange}</td>`;
                         logsHtml += `<td style="padding: 10px;">${log.reason}</td>`;
                         logsHtml += `<td style="padding: 10px;">${formattedTime}</td>`;
                         logsHtml += '</tr>';
@@ -271,6 +393,26 @@
             // Load logs when page loads
             document.addEventListener('DOMContentLoaded', loadLogs);
             {% endif %}
+        // Function to toggle bonus time
+        async function toggleBonusTime() {
+            try {
+                const response = await fetch('/admin/toggle_bonus_time', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert(data.message);
+                    // Reload the page to update the button text
+                    window.location.reload();
+                } else {
+                    alert('Error toggling bonus time - you may need to log in as admin first.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error toggling bonus time');
+            }
+        }
         </script>
     </div>
 </body>

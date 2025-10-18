@@ -32,9 +32,10 @@ create_db_and_tables()
 # Templates
 templates = Jinja2Templates(directory="templates")
 
-# In-memory storage for active kid (for simplicity in this example)
-active_kid_id = None
+# In-memory storage for active kid and session tracking
 app.state.active_kid_id = None
+app.state.session_start_time = None  # When the session started
+app.state.time_remaining_at_start = 0  # Time remaining when session started
 
 
 
@@ -63,7 +64,10 @@ def startup_event():
     with Session(engine) as session:
         existing_admin = session.get(AdminConfig, 1)
         if not existing_admin:
-            default_admin = AdminConfig(admin_password="admin")  # Default password
+            default_admin = AdminConfig(
+                admin_password="admin",  # Default password
+                bonus_time_enabled=True  # Bonus time enabled by default
+            )
             session.add(default_admin)
             session.commit()
     
@@ -73,6 +77,15 @@ def startup_event():
         if not existing_kids:
             default_kid = Kid(name="Child1", current_minutes=30, last_reset_date=str(date.today()))
             session.add(default_kid)
+            # Add a log entry for the initial time allocation
+            # Also add the same amount as initial points
+            initial_log = LogEntry(
+                kid_id=1,
+                time_change=30,
+                points_change=30,  # Add same amount as initial points
+                reason="Initial time allocation"
+            )
+            session.add(initial_log)
             session.commit()
 
 @app.get("/", response_class=HTMLResponse)
@@ -83,23 +96,18 @@ def read_root(request: Request, session: Session = Depends(get_session)):
         kid.reset_daily_bonus_if_needed()
     session.commit()
     
-    # Calculate total points for leaderboard
+    # For the leaderboard, we want to show the sum of points from log entries
+    # rather than the current time balance
     all_logs = session.exec(select(LogEntry)).all()
     
-    # Calculate total points for each kid
+    # Calculate total points for each kid (separate from time)
     kid_points = {}
     for log in all_logs:
+        # Sum up the points changes (separate from time)
         if log.kid_id in kid_points:
-            kid_points[log.kid_id] += log.minutes_changed
+            kid_points[log.kid_id] += log.points_change
         else:
-            kid_points[log.kid_id] = log.minutes_changed
-    
-    # Add current minutes to points for a complete score
-    for kid in kids:
-        if kid.id in kid_points:
-            kid_points[kid.id] += kid.current_minutes
-        else:
-            kid_points[kid.id] = kid.current_minutes
+            kid_points[log.kid_id] = log.points_change
     
     # Create a list of tuples (kid, points) and sort by points
     kid_point_pairs = [(kid, kid_points.get(kid.id, 0)) for kid in kids]
@@ -123,57 +131,61 @@ def start_session(kid_id: int, request: Request, session: Session = Depends(get_
 
 @app.get("/api/session/status")
 def session_status():
-    global last_deduction_state
     kid_id = app.state.active_kid_id
     
     if not kid_id:
         return {"is_active": False, "time_remaining_seconds": 0}
     
-    # Get the kid from database
     with Session(engine) as db_session:
         kid = db_session.get(Kid, kid_id)
         if not kid:
             return {"is_active": False, "time_remaining_seconds": 0}
         
-        # Reset daily bonus if needed
-        kid.reset_daily_bonus_if_needed()
+        # Get admin config to check if bonus time is enabled
+        admin_config = db_session.get(AdminConfig, 1)
+        bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
         
-        # Calculate total available time
+        # Reset daily bonus if needed (only if bonus time is enabled)
+        if bonus_time_enabled:
+            kid.reset_daily_bonus_if_needed()
+        
+        # Calculate initial total time available at session start
         main_time = max(0, kid.current_minutes)
-        bonus_available = max(0, 15 - kid.daily_bonus_used)
-        total_seconds = (main_time + bonus_available) * 60
+        bonus_available = 0  # Don't include bonus if disabled
+        if bonus_time_enabled:
+            bonus_available = max(0, 15 - kid.daily_bonus_used)
+        initial_total_seconds = (main_time + bonus_available) * 60
         
-        # If no time left, return status but don't deduct
-        if total_seconds <= 0:
-            return {"is_active": True, "time_remaining_seconds": 0, "kid_id": kid_id, "kid_name": kid.name}
+        # Limit session to 1 hour maximum
+        initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
         
-        # Deduct 10 seconds
-        if kid.current_minutes > 0:
-            # Deduct from current minutes if available
-            kid.current_minutes = max(-5, kid.current_minutes - 10/60)  # 10 seconds = 10/60 minutes
-        else:
-            # Deduct from daily bonus if main time is exhausted
-            kid.daily_bonus_used = min(15, kid.daily_bonus_used + 10/60)
+        # If session just started, record the start time and initial time
+        if app.state.session_start_time is None:
+            app.state.session_start_time = datetime.utcnow()
+            app.state.time_remaining_at_start = initial_total_seconds
         
-        db_session.add(kid)
-        db_session.commit()
+        # Calculate elapsed time since session started
+        current_time = datetime.utcnow()
+        total_elapsed = (current_time - app.state.session_start_time).total_seconds()
         
-        # Update our tracking state with the new values after deduction
-        last_deduction_state = {
-            'kid_id': kid_id,
-            'current_minutes': kid.current_minutes,
-            'daily_bonus_used': kid.daily_bonus_used,
-            'timestamp': datetime.utcnow()
+        # Calculate remaining time
+        time_remaining = max(0, app.state.time_remaining_at_start - total_elapsed)
+        
+        # If time is up, return 0
+        if time_remaining <= 0:
+            return {
+                "is_active": True,
+                "time_remaining_seconds": 0,
+                "kid_id": kid_id,
+                "kid_name": kid.name
+            }
+        
+        return {
+            "is_active": True,
+            "time_remaining_seconds": time_remaining,
+            "kid_id": kid_id,
+            "kid_name": kid.name
         }
-        
-        # Calculate remaining time after deduction (for return value)
-        # Recalculate after deduction
-        updated_main_time = max(0, kid.current_minutes)
-        updated_bonus_available = max(0, 15 - kid.daily_bonus_used)
-        remaining_seconds = (updated_main_time + updated_bonus_available) * 60 - 10
-        remaining_seconds = max(0, remaining_seconds)  # Ensure non-negative
-        
-        return {"is_active": True, "time_remaining_seconds": remaining_seconds, "kid_id": kid_id, "kid_name": kid.name}
 
 @app.get("/api/kids")
 def get_kids(session: Session = Depends(get_session)):
@@ -184,7 +196,14 @@ def get_kids(session: Session = Depends(get_session)):
 def admin_page(request: Request, session: Session = Depends(get_session)):
     if request.session.get("admin_authenticated"):
         kids = session.exec(select(Kid)).all()
-        return templates.TemplateResponse("admin.html", {"request": request, "kids": kids})
+        # Get admin config to check bonus time status
+        admin_config = session.get(AdminConfig, 1)
+        bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
+        return templates.TemplateResponse("admin.html", {
+            "request": request, 
+            "kids": kids, 
+            "bonus_time_enabled": bonus_time_enabled
+        })
     else:
         return templates.TemplateResponse("admin.html", {"request": request})
 
@@ -221,10 +240,41 @@ def update_time(
     kid.current_minutes = max(-5, kid.current_minutes + minutes)
     session.add(kid)
     
-    # Create log entry
+    # Create log entry - time change and also add same amount as points
     log_entry = LogEntry(
         kid_id=kid_id,
-        minutes_changed=minutes,
+        time_change=minutes,
+        points_change=minutes,  # Add same amount as points
+        reason=reason
+    )
+    session.add(log_entry)
+    session.commit()
+    
+    return RedirectResponse(url="/admin", status_code=303)
+
+
+@app.post("/admin/points")
+def update_points(
+    request: Request,
+    kid_id: int = Form(...),
+    points: int = Form(...),
+    reason: str = Form(...),
+    session: Session = Depends(get_session)
+):
+    # Check if admin is authenticated by checking session cookie
+    if not request.session.get("admin_authenticated"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get the kid
+    kid = session.get(Kid, kid_id)
+    if not kid:
+        return HTMLResponse(content="Kid not found", status_code=404)
+    
+    # Create log entry - points change only, no time change
+    log_entry = LogEntry(
+        kid_id=kid_id,
+        time_change=0,  # No time change when updating points
+        points_change=points,
         reason=reason
     )
     session.add(log_entry)
@@ -247,6 +297,17 @@ def add_kid(
     # Create new kid
     new_kid = Kid(name=name, current_minutes=initial_minutes, last_reset_date=str(date.today()))
     session.add(new_kid)
+    session.commit()
+    
+    # Create log entry for initial time allocation
+    # Also add the same amount as initial points
+    initial_log = LogEntry(
+        kid_id=new_kid.id,
+        time_change=initial_minutes,
+        points_change=initial_minutes,  # Add same amount as initial points
+        reason="Initial time allocation"
+    )
+    session.add(initial_log)
     session.commit()
     
     return RedirectResponse(url="/admin", status_code=303)
@@ -299,13 +360,133 @@ def delete_kid(
 
 
 @app.post("/admin/start_session/{kid_id}")
-def admin_start_session(kid_id: int, request: Request):
+def admin_start_session(kid_id: int, request: Request, session: Session = Depends(get_session)):
     # Check if admin is authenticated by checking session cookie
     if not request.session.get("admin_authenticated"):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    # Get the kid to check available time
+    kid = session.get(Kid, kid_id)
+    if not kid:
+        raise HTTPException(status_code=404, detail="Kid not found")
+    
+    # Get admin config to check if bonus time is enabled
+    admin_config = session.get(AdminConfig, 1)
+    bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
+    
+    # Reset daily bonus if needed (only if bonus is enabled)
+    if bonus_time_enabled:
+        kid.reset_daily_bonus_if_needed()
+    
+    # Calculate total available time
+    main_time = max(0, kid.current_minutes)
+    bonus_available = 0  # Don't include bonus if disabled
+    if bonus_time_enabled:
+        bonus_available = max(0, 15 - kid.daily_bonus_used)
+    total_available_seconds = (main_time + bonus_available) * 60
+    
+    # If no time available, don't start session
+    if total_available_seconds <= 0:
+        raise HTTPException(status_code=400, detail="No time available for this kid")
+    
+    # Limit session to 1 hour maximum
+    total_available_seconds = min(total_available_seconds, 3600)  # 1 hour = 3600 seconds
+    
     app.state.active_kid_id = kid_id
+    app.state.session_start_time = datetime.utcnow()  # Record when session started
+    app.state.time_remaining_at_start = total_available_seconds  # Record initial time
+    
     return {"message": f"Session started for kid {kid_id}"}
+
+
+@app.post("/admin/stop_session")
+def admin_stop_session(request: Request, session: Session = Depends(get_session)):
+    # Check if admin is authenticated by checking session cookie
+    if not request.session.get("admin_authenticated"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    kid_id = app.state.active_kid_id
+    if kid_id:
+        # Get the kid from database
+        kid = session.get(Kid, kid_id)
+        if kid:
+            # Get admin config to check if bonus time is enabled
+            admin_config = session.get(AdminConfig, 1)
+            bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
+            
+            # Reset daily bonus if needed (only if bonus is enabled)
+            if bonus_time_enabled:
+                kid.reset_daily_bonus_if_needed()
+            
+            # Calculate initial total time available at session start
+            main_time = max(0, kid.current_minutes)
+            bonus_available = 0  # Don't include bonus if disabled
+            if bonus_time_enabled:
+                bonus_available = max(0, 15 - kid.daily_bonus_used)
+            initial_total_seconds = (main_time + bonus_available) * 60
+            
+            # Limit session to 1 hour maximum
+            initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
+            
+            # Calculate total elapsed time at the moment of stopping
+            current_time = datetime.utcnow()
+            if app.state.session_start_time:
+                # Calculate from start to now
+                total_elapsed = (current_time - app.state.session_start_time).total_seconds()
+            else:
+                total_elapsed = 0
+            
+            # Ensure we don't deduct more than what was available
+            total_elapsed = min(total_elapsed, initial_total_seconds)
+            
+            # Deduct the elapsed time from the kid's time
+            total_elapsed_minutes = total_elapsed / 60.0
+            
+            # First, try to deduct from main time
+            if kid.current_minutes > 0:
+                kid.current_minutes = max(-5, kid.current_minutes - total_elapsed_minutes)
+                
+                # If main time went negative and bonus is enabled, use bonus time for the remainder
+                if bonus_time_enabled and kid.current_minutes < 0:
+                    remaining_to_deduct = abs(kid.current_minutes)  # How much more to deduct
+                    kid.daily_bonus_used = min(15, kid.daily_bonus_used + remaining_to_deduct)
+                    kid.current_minutes = -5  # Cap at -5
+            elif bonus_time_enabled and kid.daily_bonus_used < 15:
+                # If main time was already exhausted, deduct from bonus time
+                kid.daily_bonus_used = min(15, kid.daily_bonus_used + total_elapsed_minutes)
+            
+            session.add(kid)
+            session.commit()
+    
+    # Reset all session tracking
+    app.state.active_kid_id = None
+    app.state.session_start_time = None
+    app.state.time_remaining_at_start = 0
+    
+    return {"message": "Session stopped and time deducted"}
+
+
+
+
+
+@app.post("/admin/toggle_bonus_time")
+def admin_toggle_bonus_time(request: Request, session: Session = Depends(get_session)):
+    # Check if admin is authenticated by checking session cookie
+    if not request.session.get("admin_authenticated"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get the admin config
+    admin_config = session.get(AdminConfig, 1)
+    if not admin_config:
+        raise HTTPException(status_code=404, detail="Admin config not found")
+    
+    # Toggle the bonus time setting
+    admin_config.bonus_time_enabled = not admin_config.bonus_time_enabled
+    session.add(admin_config)
+    session.commit()
+    
+    status = "enabled" if admin_config.bonus_time_enabled else "disabled"
+    return {"message": f"Bonus time {status}"}
 
 
 @app.get("/admin/logs")
@@ -329,17 +510,12 @@ last_deduction_state = {
 
 @app.get("/api/active-session")
 def active_session():
-    global last_deduction_state
     kid_id = app.state.active_kid_id
     
     if not kid_id:
-        # Reset the state tracking when no active session
-        last_deduction_state = {
-            'kid_id': None,
-            'current_minutes': 0,
-            'daily_bonus_used': 0,
-            'timestamp': datetime.utcnow()
-        }
+        # Reset all session tracking when no active session
+        app.state.session_start_time = None
+        app.state.time_remaining_at_start = 0
         return {"is_active": False, "active_kid": None}
     
     # Get the kid from database to get name
@@ -348,55 +524,42 @@ def active_session():
         if not kid:
             return {"is_active": False, "active_kid": None}
         
-        # Reset daily bonus if needed (for consistency)
-        kid.reset_daily_bonus_if_needed()
+        # Get admin config to check if bonus time is enabled
+        admin_config = db_session.get(AdminConfig, 1)
+        bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
         
-        # Check if this is the same kid as last time or a new session
-        if last_deduction_state['kid_id'] != kid_id:
-            # New session, update tracking state
-            last_deduction_state = {
-                'kid_id': kid_id,
-                'current_minutes': kid.current_minutes,
-                'daily_bonus_used': kid.daily_bonus_used,
-                'timestamp': datetime.utcnow()
-            }
+        # Reset daily bonus if needed (for consistency, only if bonus is enabled)
+        if bonus_time_enabled:
+            kid.reset_daily_bonus_if_needed()
         
-        # Calculate time elapsed since the last known state
-        time_elapsed = (datetime.utcnow() - last_deduction_state['timestamp']).total_seconds()
+        # Calculate initial total time available at session start
+        main_time = max(0, kid.current_minutes)
+        bonus_available = 0  # Don't include bonus if disabled
+        if bonus_time_enabled:
+            bonus_available = max(0, 15 - kid.daily_bonus_used)
+        initial_total_seconds = (main_time + bonus_available) * 60
         
-        # Estimate the effective time based on elapsed time
-        # Deductions happen every 10 seconds, so 10 seconds of time is deducted per 10 seconds
-        # For smooth display, we'll proportionally calculate the deduction
-        effective_minutes = last_deduction_state['current_minutes']
-        effective_bonus_used = last_deduction_state['daily_bonus_used']
+        # Limit session to 1 hour maximum
+        initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
         
-        # Calculate how much time should have been deducted
-        minutes_elapsed_since_known = time_elapsed / 60.0
+        # If session just started, initialize tracking
+        if app.state.session_start_time is None:
+            app.state.session_start_time = datetime.utcnow()
+            app.state.time_remaining_at_start = initial_total_seconds
         
-        # Apply deduction logic similar to the session status endpoint
-        if effective_minutes > 0:
-            # Deduct from main minutes first
-            effective_minutes = max(-5, effective_minutes - minutes_elapsed_since_known)
-            # If main time goes below zero, the remainder goes to bonus
-            if effective_minutes < 0:
-                # Calculate how much bonus time would be used from remaining negative time
-                remaining_to_deduct = abs(effective_minutes)
-                effective_bonus_used = min(15, effective_bonus_used + remaining_to_deduct)
-                # Set effective minutes to 0 (negative time is represented by bonus used)
-                effective_minutes = effective_minutes  # Keep the negative value to show bonus time in use
-        else:
-            # If main time is already exhausted, deduct from bonus
-            effective_bonus_used = min(15, effective_bonus_used + minutes_elapsed_since_known)
+        # Calculate elapsed time since session started
+        current_time = datetime.utcnow()
+        total_elapsed = (current_time - app.state.session_start_time).total_seconds()
         
-        # Calculate remaining effective time in seconds
-        effective_seconds = effective_minutes * 60
+        # Calculate remaining time
+        time_remaining = max(0, app.state.time_remaining_at_start - total_elapsed)
         
         return {
             "is_active": True,
             "active_kid": {
                 "id": kid.id,
                 "name": kid.name,
-                "time_remaining_seconds": effective_seconds
+                "time_remaining_seconds": time_remaining
             }
         }
 
@@ -420,7 +583,8 @@ def get_logs_api(request: Request, session: Session = Depends(get_session)):
         logs_data.append({
             "id": log.id,
             "kid_name": kid_name,
-            "minutes_changed": log.minutes_changed,
+            "time_change": log.time_change,
+            "points_change": log.points_change,
             "reason": log.reason,
             "timestamp": log.timestamp.isoformat()
         })

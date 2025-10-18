@@ -34,7 +34,8 @@ class Kid(SQLModel, table=True):
 class LogEntry(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     kid_id: int
-    minutes_changed: int  # Positive = reward, negative = penalty
+    time_change: int  # Change in time (for PC usage) - Positive = reward, negative = penalty
+    points_change: int  # Change in points (for leaderboard) - Positive = reward, negative = penalty
     reason: str
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
@@ -42,3 +43,4 @@ class LogEntry(SQLModel, table=True):
 class AdminConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     admin_password: str = Field(default="admin")  # Default password
+    bonus_time_enabled: bool = Field(default=True)  # Whether bonus time is enabled
