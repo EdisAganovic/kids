@@ -10,6 +10,13 @@ FamilyTime Manager je aplikacija za upravljanje vremenom provedenim ispred ekran
 - **Sigurna administracija**: Admin panel zaštićen lozinkom za upravljanje djece i vremenom
 - **Praćenje aktivnosti**: Logovi svih promjena vremena za evidenciju
 - **Real-time nadzor**: Pregled aktivne sesije i preostalog vremena u realnom vremenu
+- **Auto-refresh**: Frontend se automatski osvježava svakih 30 sekundi
+- **Bez obavještenja**: Sesije se pokreću i zaustavljaju bez dodatnih JavaScript poruka
+- **Upravljanje logovima**: Mogućnost uređivanja razloga u logovima aktivnosti
+- **Nezavisni bodovi**: Bodovi se ne diraju prilikom završetka sesije
+- **Preračunavanje bodova**: Opcija za preračunavanje bodova na osnovu logova aktivnosti
+- **Kolapsibilne sekcije**: Administrator panel ima kolapsibilne sekcije za bolji pregled
+- **Raspored forme**: "Update Kid Time" i "Update Kid Points" su u dvije kolone
 
 ## Tehnologije
 
@@ -54,6 +61,8 @@ FamilyTime Manager je aplikacija za upravljanje vremenom provedenim ispred ekran
 - Samo administrator može pokrenuti sesiju za dijete
 - Aplikacija automatski odbrojava vrijeme kada je sesija aktivna
 - Kada vrijeme istekne, računar se automatski zaključava
+- Administrator može uređivati razloge u logovima aktivnosti
+- Bodovi se ne diraju prilikom završetka sesije, već se mogu preračunati na osnovu logova
 
 ## Sigurnost
 

@@ -208,6 +208,10 @@
     <div class="container">
         <h1>Djeca koja slušaju roditelje</h1>
         
+        <div class="admin-link" style="margin-bottom: 10px;">
+            <a href="/admin">Administracija</a>
+        </div>
+        
         <!-- Active Session Info -->
         <div class="active-session-info" id="active-session-info">
             <h2 id="session-status">No active session</h2>
@@ -228,9 +232,7 @@
             {% endfor %}
         </div>
         
-        <div class="admin-link">
-            <p id="admin-info"><a href="/admin">Administracija</a></p>
-        </div>
+
     </div>
 
     <script>
@@ -271,15 +273,12 @@
                 });
                 
                 if (response.ok) {
-                    alert(`Session started for ${getKidName(kidId)}`);
                     updateActiveSessionDisplay();
                 } else {
-                    alert('Error starting session - you may need to log in as admin first.');
                     window.location.href = '/admin';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error starting session');
             }
         }
         
@@ -291,15 +290,12 @@
                 });
                 
                 if (response.ok) {
-                    alert('Session stopped');
                     updateActiveSessionDisplay();
                 } else {
-                    alert('Error stopping session - you may need to log in as admin first.');
                     window.location.href = '/admin';
                 }
             } catch (error) {
                 console.error('Error:', error);
-                alert('Error stopping session');
             }
         }
         
@@ -440,6 +436,11 @@
         
         // Re-check admin status every 30 seconds
         setInterval(checkAdminStatus, 30000);
+        
+        // Auto-refresh the entire page every 30 seconds
+        setInterval(function() {
+            location.reload();
+        }, 30000); // 30 seconds
     </script>
 </body>
 </html>

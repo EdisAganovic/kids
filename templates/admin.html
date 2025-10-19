@@ -203,6 +203,10 @@
     <div class="container">
         <h1>FamilyTime Manager - Admin</h1>
         
+        <div class="back-to-home" style="margin-bottom: 10px;">
+            <a href="/">Početna stranica</a>
+        </div>
+        
         {% if not request.session.admin_authenticated %}
         <div class="login-form">
             <h2>Admin Login</h2>
@@ -219,100 +223,115 @@
             {% endif %}
         </div>
         {% else %}
-        <!-- Update Kid Time Form -->
-        <div class="admin-form">
-            <h2>Update Kid Time</h2>
-            <form method="post" action="/admin/time">
-                <div class="form-group">
-                    <label for="time_kid_id">Select Kid:</label>
-                    <select id="time_kid_id" name="kid_id" required>
-                        {% for kid in kids %}
-                        <option value="{{ kid.id }}">{{ kid.name }}</option>
-                        {% endfor %}
-                    </select>
+        <!-- Container for Update Kid Time and Points Forms in two columns -->
+        <div style="display: flex; flex-wrap: wrap; gap: 15px; width: 100%;">
+            <!-- Update Kid Time Form -->
+            <div class="admin-form" style="flex: 1; min-width: 300px;">
+                <h2>Update Kid Time</h2>
+                <form method="post" action="/admin/time">
+                    <div class="form-group">
+                        <label for="time_kid_id">Select Kid:</label>
+                        <select id="time_kid_id" name="kid_id" required>
+                            {% for kid in kids %}
+                            <option value="{{ kid.id }}">{{ kid.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="minutes">Minutes (positive to add, negative to subtract):</label>
+                        <input type="number" id="minutes" name="minutes" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="time_reason">Reason:</label>
+                        <input type="text" id="time_reason" name="reason" required>
+                    </div>
+                    
+                    <button type="submit">Update Time</button>
+                </form>
+            </div>
+            
+            <!-- Update Kid Points Form -->
+            <div class="admin-form" style="flex: 1; min-width: 300px;">
+                <h2 class="section-title" onclick="toggleSection('update-points-section')" style="cursor: pointer; user-select: none;">
+                    Update Kid Points ▲
+                </h2>
+                <div id="update-points-section" style="display: block;">
+                    <form method="post" action="/admin/points">
+                        <div class="form-group">
+                            <label for="points_kid_id">Select Kid:</label>
+                            <select id="points_kid_id" name="kid_id" required>
+                                {% for kid in kids %}
+                                <option value="{{ kid.id }}">{{ kid.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="points">Points (positive to add, negative to subtract):</label>
+                            <input type="number" id="points" name="points" required>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="points_reason">Reason:</label>
+                            <input type="text" id="points_reason" name="reason" required>
+                        </div>
+                        
+                        <button type="submit">Update Points</button>
+                    </form>
                 </div>
-                
-                <div class="form-group">
-                    <label for="minutes">Minutes (positive to add, negative to subtract):</label>
-                    <input type="number" id="minutes" name="minutes" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="time_reason">Reason:</label>
-                    <input type="text" id="time_reason" name="reason" required>
-                </div>
-                
-                <button type="submit">Update Time</button>
-            </form>
-        </div>
-        
-        <!-- Update Kid Points Form -->
-        <div class="admin-form">
-            <h2>Update Kid Points</h2>
-            <form method="post" action="/admin/points">
-                <div class="form-group">
-                    <label for="points_kid_id">Select Kid:</label>
-                    <select id="points_kid_id" name="kid_id" required>
-                        {% for kid in kids %}
-                        <option value="{{ kid.id }}">{{ kid.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label for="points">Points (positive to add, negative to subtract):</label>
-                    <input type="number" id="points" name="points" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="points_reason">Reason:</label>
-                    <input type="text" id="points_reason" name="reason" required>
-                </div>
-                
-                <button type="submit">Update Points</button>
-            </form>
+            </div>
         </div>
         
         <!-- Add New Kid Form -->
         <div class="add-kid-form">
-            <h2 class="section-title">Add New Kid</h2>
-            <form method="post" action="/admin/add_kid">
-                <div class="form-group">
-                    <label for="new_kid_name">Kid Name:</label>
-                    <input type="text" id="new_kid_name" name="name" required>
-                </div>
-                
-                <div class="form-group">
-                    <label for="initial_minutes">Initial Minutes:</label>
-                    <input type="number" id="initial_minutes" name="initial_minutes" value="30" min="-5" required>
-                </div>
-                
-                <button type="submit">Add Kid</button>
-            </form>
+            <h2 class="section-title" onclick="toggleSection('add-kid-section')" style="cursor: pointer; user-select: none;">
+                Add New Kid ▼
+            </h2>
+            <div id="add-kid-section" style="display: none;">
+                <form method="post" action="/admin/add_kid">
+                    <div class="form-group">
+                        <label for="new_kid_name">Kid Name:</label>
+                        <input type="text" id="new_kid_name" name="name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="initial_minutes">Initial Minutes:</label>
+                        <input type="number" id="initial_minutes" name="initial_minutes" value="30" min="-5" required>
+                    </div>
+
+                    <button type="submit">Add Kid</button>
+                </form>
+            </div>
         </div>
         
         <!-- Kids List with Edit/Delete Options -->
         <div class="kids-list">
-            <h2 class="section-title">Kids List</h2>
-            {% for kid in kids %}
-            <div class="kid-item">
-                <div class="kid-info">
-                    <form method="post" action="/admin/edit_kid" style="display: inline;">
-                        <input type="hidden" name="kid_id" value="{{ kid.id }}">
-                        <input type="text" name="name" value="{{ kid.name }}" style="width: auto; display: inline;">
-                        <button type="submit">Rename</button>
-                    </form>
-                    <div style="margin-top: 5px;">Time: {{ "%.1f"|format(kid.current_minutes) }} minutes</div>
+            <h2 class="section-title" onclick="toggleSection('kids-list-section')" style="cursor: pointer; user-select: none;">
+                Kids List ▼
+            </h2>
+            <div id="kids-list-section" style="display: none;">
+                {% for kid in kids %}
+                <div class="kid-item">
+                    <div class="kid-info">
+                        <form method="post" action="/admin/edit_kid" style="display: inline;">
+                            <input type="hidden" name="kid_id" value="{{ kid.id }}">
+                            <input type="text" name="name" value="{{ kid.name }}" style="width: auto; display: inline;">
+                            <button type="submit">Rename</button>
+                        </form>
+                        <div style="margin-top: 5px;">Time: {{ "%.1f"|format(kid.current_minutes) }} minutes</div>
+                    </div>
+                    <div class="edit-delete-buttons">
+                        <form method="post" action="/admin/delete_kid" style="display: inline;" 
+                              onsubmit="return confirm('Are you sure you want to delete {{ kid.name }}? This action cannot be undone.');">
+                            <input type="hidden" name="kid_id" value="{{ kid.id }}">
+                            <button type="submit">Delete</button>
+                        </form>
+                    </div>
                 </div>
-                <div class="edit-delete-buttons">
-                    <form method="post" action="/admin/delete_kid" style="display: inline;" 
-                          onsubmit="return confirm('Are you sure you want to delete {{ kid.name }}? This action cannot be undone.');">
-                        <input type="hidden" name="kid_id" value="{{ kid.id }}">
-                        <button type="submit">Delete</button>
-                    </form>
-                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
         </div>
         
         <!-- Logs Section -->
@@ -331,9 +350,13 @@
             <button onclick="toggleBonusTime()">Toggle Bonus Time (Currently: {% if bonus_time_enabled %}Enabled{% else %}Disabled{% endif %})</button>
         </div>
         
-        <div class="back-to-home">
-            <a href="/">Back to Kids' Page</a>
+        <!-- Recalculate Points -->
+        <div class="admin-form" style="margin-top: 20px;">
+            <h2>Points Management</h2>
+            <button onclick="recalculatePoints()">Recalculate Points from Logs</button>
         </div>
+        
+
         {% endif %}
         
         <script>
@@ -380,7 +403,7 @@
                         logsHtml += `<td style="padding: 10px;">Time: ${timeChange}, Points: ${pointsChange}</td>`;
                         logsHtml += `<td style="padding: 10px;">${log.reason}</td>`;
                         logsHtml += `<td style="padding: 10px;">${formattedTime}</td>`;
-                        logsHtml += `<td style="padding: 10px;"><button onclick="deleteLog(${log.id})" style="background-color: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">Delete</button></td>`;
+                        logsHtml += `<td style="padding: 10px;"><button onclick="deleteLog(${log.id})" style="background-color: #ff4d4d; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">Delete</button> <button onclick="editLogReason(${log.id}, '${log.reason.replace(/'/g, "\\'").replace(/"/g, '&quot;')}')" style="background-color: #4d79ff; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">Edit Reason</button></td>`;
                         logsHtml += '</tr>';
                     });
                     
@@ -440,6 +463,98 @@
                 alert('Error deleting log entry');
             }
         }
+        
+        // Function to edit log reason
+        async function editLogReason(logId, currentReason) {
+            const newReason = prompt('Edit the reason:', currentReason);
+            if (newReason === null) {
+                // User cancelled the prompt
+                return;
+            }
+            
+            // Trim whitespace and check if reason is empty
+            if (newReason.trim() === '') {
+                alert('Reason cannot be empty.');
+                return;
+            }
+            
+            try {
+                const formData = new FormData();
+                formData.append('reason', newReason);
+                
+                const response = await fetch(`/admin/update_log_reason/${logId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    // Reload logs to reflect the update
+                    loadLogs();
+                    alert('Log reason updated successfully.');
+                } else {
+                    const errorData = await response.json();
+                    alert('Error updating log reason: ' + (errorData.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error updating log reason');
+            }
+        }
+        
+        // Function to recalculate points based on logs
+        async function recalculatePoints() {
+            if (!confirm('Are you sure you want to recalculate all points based on activity logs? This will update the points for all kids based on their log entries.')) {
+                return;
+            }
+            
+            try {
+                const response = await fetch('/admin/recalculate_points', {
+                    method: 'POST'
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    alert('Points recalculated successfully: ' + JSON.stringify(data.kid_points));
+                } else {
+                    const errorData = await response.json();
+                    alert('Error recalculating points: ' + (errorData.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Error recalculating points');
+            }
+        }
+        
+        // Function to toggle section visibility
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const header = section.previousElementSibling; // The h2 element
+            
+            if (section.style.display === 'none' || section.style.display === '') {
+                section.style.display = 'block';
+                header.innerHTML = header.innerHTML.replace('▼', '▲');
+            } else {
+                section.style.display = 'none';
+                header.innerHTML = header.innerHTML.replace('▲', '▼');
+            }
+        }
+        
+        // Collapse sections by default on page load (except update points)
+        document.addEventListener('DOMContentLoaded', function() {
+            // Update Kid Points section remains open by default
+            
+            // Collapse the add kid section by default
+            const addKidSection = document.getElementById('add-kid-section');
+            if (addKidSection) {
+                addKidSection.style.display = 'none';
+            }
+            
+            // Collapse the kids list section by default
+            const kidsListSection = document.getElementById('kids-list-section');
+            if (kidsListSection) {
+                kidsListSection.style.display = 'none';
+            }
+        });
         </script>
     </div>
 </body>

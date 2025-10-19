@@ -15,3 +15,6 @@ Use streamlit to display interface.
 
 #Readme
 Readme.md will be always in bosnian language.
+
+#Database
+Never delete SQLite database.

@@ -192,6 +192,8 @@ void updateForNextKid() {
 
     if (httpResponseCode > 0) {
       Serial.println("Time expired notification sent successfully");
+      // After sending the notification, we should refresh the page to get the next kid
+      // This will be handled by the next API call which will fetch the new active session
     } else {
       Serial.print("Error sending time expired notification: ");
       Serial.println(httpResponseCode);
