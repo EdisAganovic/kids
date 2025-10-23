@@ -129,7 +129,23 @@ def start_session(kid_id: int, request: Request, session: Session = Depends(get_
     # Get the kid to record the original time
     kid = session.get(Kid, kid_id)
     if kid:
+        # Get admin config to check if bonus time is enabled
+        admin_config = session.get(AdminConfig, 1)
+        bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
+        
+        # Reset daily bonus if needed (only if bonus is enabled)
+        if bonus_time_enabled:
+            kid.reset_daily_bonus_if_needed()
+        
+        # Calculate total available time
+        main_time = max(0, kid.current_minutes)
+        bonus_available = 0  # Don't include bonus if disabled
+        if bonus_time_enabled:
+            bonus_available = max(0, 15 - kid.daily_bonus_used)
+        total_available_seconds = (main_time + bonus_available) * 60
+        
         app.state.original_time_at_session_start = kid.current_minutes  # Record original time for accurate deduction
+        app.state.time_remaining_at_start = total_available_seconds  # Record initial time
     
     global active_kid_id
     app.state.active_kid_id = kid_id
@@ -162,9 +178,6 @@ def session_status():
         if bonus_time_enabled:
             bonus_available = max(0, 15 - kid.daily_bonus_used)  # Use current bonus used at session start
         initial_total_seconds = (main_time + bonus_available) * 60
-        
-        # Limit session to 1 hour maximum
-        initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
         
         # If session just started, record the start time and initial time
         if app.state.session_start_time is None:
@@ -397,15 +410,63 @@ def admin_start_session(kid_id: int, request: Request, session: Session = Depend
     if total_available_seconds <= 0:
         raise HTTPException(status_code=400, detail="No time available for this kid")
     
-    # Limit session to 1 hour maximum
-    total_available_seconds = min(total_available_seconds, 3600)  # 1 hour = 3600 seconds
-    
     app.state.active_kid_id = kid_id
     app.state.session_start_time = datetime.utcnow()  # Record when session started
     app.state.time_remaining_at_start = total_available_seconds  # Record initial time
     app.state.original_time_at_session_start = kid.current_minutes  # Record original time for accurate deduction
     
     return {"message": f"Session started for kid {kid_id}"}
+
+
+@app.post("/admin/start_session_with_time")
+def admin_start_session_with_time(
+    request: Request,
+    kid_id: int = Form(...),
+    session_time: int = Form(...),
+    session: Session = Depends(get_session)
+):
+    # Check if admin is authenticated by checking session cookie
+    if not request.session.get("admin_authenticated"):
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get the kid to check available time
+    kid = session.get(Kid, kid_id)
+    if not kid:
+        raise HTTPException(status_code=404, detail="Kid not found")
+    
+    # Validate that requested session time is positive
+    if session_time <= 0:
+        raise HTTPException(status_code=400, detail="Session time must be greater than 0")
+    
+    # Get admin config to check if bonus time is enabled
+    admin_config = session.get(AdminConfig, 1)
+    bonus_time_enabled = admin_config.bonus_time_enabled if admin_config else True
+    
+    # Reset daily bonus if needed (only if bonus is enabled)
+    if bonus_time_enabled:
+        kid.reset_daily_bonus_if_needed()
+    
+    # Calculate total available time
+    main_time = max(0, kid.current_minutes)
+    bonus_available = 0  # Don't include bonus if disabled
+    if bonus_time_enabled:
+        bonus_available = max(0, 15 - kid.daily_bonus_used)
+    total_available_seconds = (main_time + bonus_available) * 60
+    
+    # If no time available, don't start session
+    if total_available_seconds <= 0:
+        raise HTTPException(status_code=400, detail="No time available for this kid")
+    
+    # Use the custom session time (convert to seconds), but don't exceed available time
+    requested_seconds = session_time * 60
+    actual_session_seconds = min(requested_seconds, total_available_seconds)
+    
+    app.state.active_kid_id = kid_id
+    app.state.session_start_time = datetime.utcnow()  # Record when session started
+    app.state.time_remaining_at_start = actual_session_seconds  # Record initial time
+    app.state.original_time_at_session_start = kid.current_minutes  # Record original time for accurate deduction
+    
+    return {"message": f"Session started for kid {kid_id} with {session_time} minutes"}
 
 
 import subprocess
@@ -457,9 +518,6 @@ def admin_stop_session(request: Request, session: Session = Depends(get_session)
             if bonus_time_enabled:
                 original_bonus_available = max(0, 15 - kid.daily_bonus_used)  # Use current bonus used at session start
             initial_total_seconds = (original_main_time + original_bonus_available) * 60
-            
-            # Limit session to 1 hour maximum
-            initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
             
             # Use the minimum of elapsed time and initial available time
             total_elapsed = min(total_elapsed, initial_total_seconds)
@@ -584,9 +642,6 @@ def active_session():
             bonus_available = max(0, 15 - kid.daily_bonus_used)  # Use current bonus used at session start
         initial_total_seconds = (main_time + bonus_available) * 60
         
-        # Limit session to 1 hour maximum
-        initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
-        
         # If session just started, initialize tracking
         if app.state.session_start_time is None:
             app.state.session_start_time = datetime.utcnow()
@@ -693,9 +748,6 @@ def time_expired_endpoint(request: Request, session: Session = Depends(get_sessi
             if bonus_time_enabled:
                 original_bonus_available = max(0, 15 - kid.daily_bonus_used)  # Use current bonus used at session start
             initial_total_seconds = (original_main_time + original_bonus_available) * 60
-            
-            # Limit session to 1 hour maximum
-            initial_total_seconds = min(initial_total_seconds, 3600)  # 1 hour = 3600 seconds
             
             # Calculate total elapsed time (which should be the full initial time since it expired)
             total_elapsed = initial_total_seconds

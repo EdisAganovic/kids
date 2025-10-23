@@ -539,6 +539,17 @@
             }
         }
         
+        // Function to update max time when kid is selected
+        function updateMaxTime(selectElement) {
+            const selectedOption = selectElement.options[selectElement.selectedIndex];
+            const availableTime = selectedOption.getAttribute('data-available-time');
+            const timeInput = document.getElementById('session_time');
+            const timeHelpText = document.getElementById('time-help-text');
+            
+            timeInput.value = availableTime;  // Set default to available time
+            timeHelpText.textContent = `Available time: ${availableTime} minutes`;
+        }
+        
         // Collapse sections by default on page load (except update points)
         document.addEventListener('DOMContentLoaded', function() {
             // Update Kid Points section remains open by default

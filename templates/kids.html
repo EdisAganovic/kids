@@ -235,6 +235,18 @@
 
     </div>
 
+    <!-- Modal for custom session time -->
+    <div id="customTimeModal" class="modal" style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5);">
+        <div class="modal-content" style="background-color: #1e1e1e; margin: 15% auto; padding: 20px; border: 1px solid #333; border-radius: 8px; width: 300px; text-align: center;">
+            <h3 style="color: #bb86fc; margin-top: 0;">Postavi vrijeme sesije</h3>
+            <p id="modal-kid-name" style="color: #e0e0e0; margin-bottom: 15px;"></p>
+            <p id="available-time" style="color: #03dac6; margin-bottom: 15px;"></p>
+            <input type="number" id="custom-time-input" min="1" style="width: 100px; padding: 8px; margin: 10px; border-radius: 4px; border: 1px solid #333; background-color: #333; color: #e0e0e0;">
+            <button onclick="confirmCustomTime()" style="background-color: #333; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; margin: 10px;">Pokreni</button>
+            <button onclick="closeCustomTimeModal()" style="background-color: #333; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; margin: 10px;">Otkaži</button>
+        </div>
+    </div>
+
     <script>
         // Check if admin is logged in and show/hide buttons accordingly
         async function checkAdminStatus() {
@@ -265,11 +277,53 @@
             }
         }
         
+        let currentKidId = null;
+        
         async function startSession(kidId) {
+            currentKidId = kidId;
+            
+            // Get kid data to show available time
             try {
-                // Use the admin endpoint to start session
-                const response = await fetch(`/admin/start_session/${kidId}`, {
-                    method: 'POST'
+                const response = await fetch('/api/kids');
+                const kids = await response.json();
+                
+                const kid = kids.find(k => k.id === kidId);
+                if (kid) {
+                    document.getElementById('modal-kid-name').textContent = kid.name;
+                    document.getElementById('available-time').textContent = `Dostupno vrijeme: ${kid.minutes} minuta`;
+                    document.getElementById('custom-time-input').value = kid.minutes; // Set default to available time
+                }
+            } catch (error) {
+                console.error('Error fetching kid data:', error);
+                document.getElementById('modal-kid-name').textContent = `Dijete ${kidId}`;
+                document.getElementById('available-time').textContent = 'Dostupno vrijeme: nepoznato';
+                document.getElementById('custom-time-input').value = 30; // Default to 30 if error
+            }
+            
+            // Show the modal
+            document.getElementById('customTimeModal').style.display = 'block';
+        }
+        
+        function confirmCustomTime() {
+            const customTime = document.getElementById('custom-time-input').value;
+            if (customTime && parseInt(customTime) > 0) {
+                // Send request to start session with custom time
+                startSessionWithCustomTime(currentKidId, parseInt(customTime));
+                closeCustomTimeModal();
+            } else {
+                alert('Molimo unesite ispravno vrijeme (veće od 0 minuta)');
+            }
+        }
+        
+        async function startSessionWithCustomTime(kidId, sessionTime) {
+            try {
+                const formData = new FormData();
+                formData.append('kid_id', kidId);
+                formData.append('session_time', sessionTime);
+                
+                const response = await fetch('/admin/start_session_with_time', {
+                    method: 'POST',
+                    body: formData
                 });
                 
                 if (response.ok) {
@@ -279,6 +333,18 @@
                 }
             } catch (error) {
                 console.error('Error:', error);
+            }
+        }
+        
+        function closeCustomTimeModal() {
+            document.getElementById('customTimeModal').style.display = 'none';
+        }
+        
+        // Close modal if clicked outside the content
+        window.onclick = function(event) {
+            const modal = document.getElementById('customTimeModal');
+            if (event.target === modal) {
+                modal.style.display = 'none';
             }
         }
         
